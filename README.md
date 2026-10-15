@@ -83,13 +83,13 @@ make test-integration   # needs Postgres (docker compose up db)
 make test-cov           # coverage report
 ```
 
-What's covered end to end: auth failure modes and immediate revocation, tenant isolation at both the API and SQL level, duplicate/corrupt/oversized/unsupported uploads, per-tenant storage quota (413), batch upload with per-file failure isolation, SSE event ordering, usage rollups, and the worker's retry-exhaustion contract (a transient failure ends in a FAILED row, never a stuck PROCESSING one). Core paths — answering, retrieval, security, models — sit at 100%. The uncovered remainder is deliberate: operator CLI and the Anthropic/local-model network paths, which need keys or model downloads. Every number here is measured, never aspirational.
+What's covered end to end: auth failure modes and immediate revocation, tenant isolation at both the API and SQL level, duplicate/corrupt/oversized/unsupported uploads, per-tenant storage quota (413), batch upload with per-file failure isolation, SSE event ordering, usage rollups, and the worker's retry-exhaustion contract (a transient failure ends in a FAILED row, never a stuck PROCESSING one). Core paths (answering, retrieval, security, models) sit at 100%. The uncovered remainder is deliberate: operator CLI and the Anthropic/local-model network paths, which need keys or model downloads. Every number here is measured, never aspirational.
 
 The same gates run in CI on every push: ruff, mypy, unit tests, `alembic upgrade` plus `alembic check` for migration/model drift, integration tests against a pgvector service, and a docker build.
 
 ## Measured performance
 
-Real numbers, reproduced by `make benchmark` and `python evals/run_eval.py`. Hardware and caveats live in `benchmarks/RESULTS.md` — read them before quoting the numbers, because latency is hardware-dependent and I'd rather you cite mine than assume yours.
+Real numbers, reproduced by `make benchmark` and `python evals/run_eval.py`. Hardware and caveats live in `benchmarks/RESULTS.md`. Read them before quoting the numbers, because latency is hardware-dependent and I'd rather you cite mine than assume yours.
 
 Hybrid-search latency excludes the LLM on purpose; it isolates the index path, which is the part that scales with corpus size. HNSW keeps p50 roughly flat as the corpus grows, which is the whole reason for the index. Answer-quality (correctness and faithfulness) has its own harness in `evals/answer_eval.py`, and it needs a real LLM to produce a meaningful score.
 
@@ -105,7 +105,7 @@ The load-bearing ones, each with full reasoning and rejected alternatives in an 
 
 ## Security
 
-OAuth2 client credentials, 30-minute HS256 JWTs. Secrets are stored as SHA-256 of 256-bit random strings — KDFs are for low-entropy passwords, not high-entropy machine credentials (ADR 0004). Revocation is immediate because liveness is checked on every request, not just at token issuance. `tenant_id` always comes from the token, never the request body, and a cross-tenant read returns 404 rather than 403, because 403 would confirm the id exists. Unknown client and wrong secret share one code path and one message, so there's no enumeration or timing oracle.
+OAuth2 client credentials, 30-minute HS256 JWTs. Secrets are stored as SHA-256 of 256-bit random strings: KDFs are for low-entropy passwords, not high-entropy machine credentials (ADR 0004). Revocation is immediate because liveness is checked on every request, not just at token issuance. `tenant_id` always comes from the token, never the request body, and a cross-tenant read returns 404 rather than 403, because 403 would confirm the id exists. Unknown client and wrong secret share one code path and one message, so there's no enumeration or timing oracle.
 
 ## What I'd do differently
 
@@ -119,7 +119,7 @@ Honest reflections, because after building something you can see the seams:
 
 ## Limitations
 
-- Ingestion status is available by polling `GET /v1/documents/{id}` (it returns an `X-Poll-Interval` hint while non-terminal) or by subscribing to the SSE stream. Outbound webhooks are future work — they need a delivery subsystem (retries, signing, dead-lettering) the SSE stream doesn't.
+- Ingestion status is available by polling `GET /v1/documents/{id}` (it returns an `X-Poll-Interval` hint while non-terminal) or by subscribing to the SSE stream. Outbound webhooks are future work: they need a delivery subsystem (retries, signing, dead-lettering) the SSE stream doesn't.
 - Per-tenant total storage is capped (`RAG_MAX_TENANT_STORAGE_BYTES`, default 500MB), enforced before the row is written. Time-windowed ingestion-rate quotas are future work.
 - No per-credential scopes yet; any tenant credential has full tenant access.
 - Postgres FTS lexes dotted identifiers oddly (`hnsw.ef_search` -> `hnsw.ef` + `search`), so keyword queries for the underscored part alone won't match. Documented, not hidden.
@@ -156,26 +156,26 @@ citations** over a REST API.
 > **Status: functionally complete; verified for single-node, ≤50k-chunk
 > workloads.** What's *verified*: 90 tests at measured coverage, hybrid
 > retrieval with a measured mode-comparison and chunk-size sweep
-> ([evals/](evals/)), hybrid-search latency measured to ~60–90 ms p50 across
-> 1k–50k chunks ([benchmarks/](benchmarks/)), per-tenant storage quotas,
+> ([evals/](evals/)), hybrid-search latency measured to ~60 to 90 ms p50 across
+> 1k to 50k chunks ([benchmarks/](benchmarks/)), per-tenant storage quotas,
 > live ingestion status (SSE + poll hint), and per-session multi-tenant login
 > in the UI. What's *designed but not validated at scale*: the 1M-user tier in
 > [SCALABILITY.md](SCALABILITY.md) (no multi-node load test was run), the AWS
 > Terraform (fmt/validate-gated in CI but never `apply`-ed to a live account),
 > and real-model answer-quality numbers (harness exists; needs a live LLM).
-> Everything not yet done is listed in *Limitations / future work* — named,
+> Everything not yet done is listed in *Limitations / future work*: named,
 > not hidden. See also *What I'd do differently* below.
 
 ## Why this project exists
 
 Teams keep rebuilding the same thing: question-answering over their own
 documents, where the answer must be traceable to a source. The interesting
-engineering isn't the demo loop (that's a weekend) — it's everything around
+engineering isn't the demo loop (that's a weekend). It's everything around
 it: per-tenant isolation you can test, ingestion that fails loudly and
 recoverably, retrieval whose ranking you can explain score-by-score, metering
 that never invents a cost, and citations that are parsed and verified rather
 than trusted. This repo is that service shape, built end-to-end and verified
-at every stage — with its limitations written down instead of papered over.
+at every stage, with its limitations written down instead of papered over.
 
 ## System architecture
 
@@ -269,7 +269,7 @@ curl "localhost:8000/v1/usage?days=30" -H "Authorization: Bearer $TOK"
 SSE stream shape: `event: citations` (sources, sent first so a UI can render
 them while tokens arrive) → `event: delta` (text) → `event: done` (usage, model,
 cost). Costs are computed only if `RAG_PRICE_INPUT_PER_MTOK` /
-`RAG_PRICE_OUTPUT_PER_MTOK` are set — otherwise usage rows record tokens and a
+`RAG_PRICE_OUTPUT_PER_MTOK` are set; otherwise usage rows record tokens and a
 NULL cost rather than an invented number. Interactive docs at `/docs`.
 
 ## Web UI
@@ -294,7 +294,7 @@ docker compose up -d web        # -> http://localhost:3000 -> log in
   otherwise), bound into every JSON log line for that request, and echoed on
   the response.
 - **Prometheus metrics** at `/metrics`: request rate/latency/status by route
-  *template* (never raw paths — cardinality protection), and LLM tokens by
+  *template* (never raw paths, cardinality protection), and LLM tokens by
   model/direction. A provisioned **Grafana dashboard** ships in
   `observability/`: `docker compose --profile observability up -d`, then
   http://localhost:3001 (rate, p95, 5xx ratio, tokens/min; port 3000 is the
@@ -305,7 +305,7 @@ docker compose up -d web        # -> http://localhost:3000 -> log in
 - **Rate limiting** (Redis fixed window): per-*tenant* on the data plane
   (more credentials must not mean more quota), a tighter per-client_id limit
   on the token endpoint checked before any secret work, `429 + Retry-After`,
-  and fail-open if Redis is down — a limiter shouldn't be a second point of
+  and fail-open if Redis is down: a limiter shouldn't be a second point of
   failure. Trade-offs (window-edge bursts) documented in `ratelimit.py`.
 - The **LLM client retries** transient failures (429/5xx/connection) with the
   SDK's exponential backoff, `RAG_LLM_MAX_RETRIES` deep.
@@ -316,7 +316,7 @@ Real numbers, reproduced by `make benchmark` and `python evals/run_eval.py`.
 Hardware and caveats: [benchmarks/RESULTS.md](benchmarks/RESULTS.md).
 
 **Retrieval quality** (19-doc corpus, 38 labeled questions; `fake` embedder,
-so read the *ordering*, not absolutes — run `RAG_EMBEDDING_PROVIDER=local` for
+so read the *ordering*, not absolutes; run `RAG_EMBEDDING_PROVIDER=local` for
 semantic magnitudes):
 
 | mode    | hit@1 | hit@3 | hit@5 | MRR@5 |
@@ -325,12 +325,12 @@ semantic magnitudes):
 | dense   | 0.474 | 0.789 | 0.816 | 0.624 |
 | hybrid  | 0.553 | 0.816 | 0.842 | 0.681 |
 
-Hybrid beats dense beats keyword at every k — the measured justification for
+Hybrid beats dense beats keyword at every k: the measured justification for
 the hybrid default (ADR 0003), not an assertion. The expected fact is in a
 retrieved chunk for 35/38 questions (0.921), so retrieval rarely bottlenecks
 the answer. A **chunk-size sweep** (`--chunk-sweep 200 400 800`) shows the
 precision/context trade-off directly: 200-token chunks win hit@1 (more
-precise), 400 wins hit@3/5 (more context) — full table in
+precise), 400 wins hit@3/5 (more context): full table in
 [evals/README.md](evals/README.md).
 
 **Hybrid-search latency** (real Postgres+pgvector, LLM excluded, 1 vCPU):
@@ -341,7 +341,7 @@ precise), 400 wins hit@3/5 (more context) — full table in
 | 10,000 | 88.9 | 135.6 | 145.2 |
 | 50,000 | 58.2 | 68.2 | 73.2 |
 
-~60–90 ms p50 at single concurrency, and HNSW keeps it flat as the corpus
+~60 to 90 ms p50 at single concurrency, and HNSW keeps it flat as the corpus
 grows 50× (full concurrency matrix in RESULTS.md). Answer-quality
 (correctness + faithfulness) has its own harness, `evals/answer_eval.py`,
 which needs a real LLM to be meaningful.
@@ -351,7 +351,7 @@ which needs a real LLM to be meaningful.
 The load-bearing decisions, each with its full reasoning and rejected
 alternatives in an ADR:
 
-- **One database for everything** — pgvector + tsvector in Postgres instead of
+- **One database for everything**: pgvector + tsvector in Postgres instead of
   a dedicated vector store and a search engine. Cost: `ts_rank_cd` is not true
   BM25, and HNSW post-filters tenant predicates. Bought: one system to
   operate, transactional consistency. ([ADR 0001](docs/adr/0001-stack-and-llm-provider.md), [0003](docs/adr/0003-hybrid-retrieval.md))
@@ -360,7 +360,7 @@ alternatives in an ADR:
   level. Bought: sane migrations and pooling. ([ADR 0002](docs/adr/0002-tenant-isolation.md))
 - **RRF over score blending**; **rerank implemented but default-off** until
   the eval harness proves the latency is paid for. ([ADR 0003](docs/adr/0003-hybrid-retrieval.md))
-- **Client-credentials OAuth2 with per-request revocation checks** — one PK
+- **Client-credentials OAuth2 with per-request revocation checks**: one PK
   read per request buys immediate revocation. ([ADR 0004](docs/adr/0004-auth-model.md))
 - **Upload bytes live in Postgres** (10MB cap) rather than adding object
   storage; **the documents row is the only job-status truth** (no Celery
@@ -369,7 +369,7 @@ alternatives in an ADR:
 ## Security notes
 
 - OAuth2 client credentials; 30-min HS256 JWTs; secrets stored as SHA-256 of
-  256-bit random strings (KDFs are for low-entropy passwords — ADR 0004).
+  256-bit random strings (KDFs are for low-entropy passwords, ADR 0004).
 - Revocation (`revoke-credential`) is immediate: credential liveness is checked
   on every request, not just at token issuance.
 - tenant_id always comes from the token, never from the request; cross-tenant
@@ -382,7 +382,7 @@ alternatives in an ADR:
 ## Try it: ingest and search from the CLI
 
 ```bash
-# offline/deterministic providers — no API keys, no model downloads:
+# offline/deterministic providers: no API keys, no model downloads:
 export RAG_DATABASE_URL=postgresql+asyncpg://rag:rag@localhost:5432/rag \
        RAG_REDIS_URL=redis://localhost:6379/0 \
        RAG_EMBEDDING_PROVIDER=fake RAG_RERANKER=fake
@@ -393,10 +393,10 @@ python -m rag_platform.cli search --tenant acme --query "how are tenants isolate
 python -m rag_platform.cli search --tenant acme --query "ef_search" --mode keyword
 ```
 
-Unset `RAG_EMBEDDING_PROVIDER` (default `local`) for real semantic retrieval —
+Unset `RAG_EMBEDDING_PROVIDER` (default `local`) for real semantic retrieval:
 requires `pip install ".[local-inference]"`; bge-small (~130MB) downloads from
 Hugging Face on first use. Results include the full score breakdown per chunk
-(`dense_cosine_sim`, `keyword_ts_rank`, `rrf`, `rerank`) — see ADR 0003.
+(`dense_cosine_sim`, `keyword_ts_rank`, `rrf`, `rerank`). See ADR 0003.
 
 ## Data model
 
@@ -439,7 +439,7 @@ erDiagram
 ```
 
 Multi-tenancy is shared-tables + `tenant_id` on every row, enforced in the
-repository layer — trade-offs and rejected alternatives (incl. RLS) in
+repository layer: trade-offs and rejected alternatives (incl. RLS) in
 [ADR 0002](docs/adr/0002-tenant-isolation.md).
 
 ### Migrations
@@ -454,7 +454,7 @@ alembic upgrade head --sql         # review the SQL without applying it
 ## Infrastructure
 
 `terraform/` provisions the AWS footprint (VPC, RDS Postgres 16, ElastiCache,
-ECS Fargate api/worker/web, ALB, ECR, Secrets Manager — secret *values* never
+ECS Fargate api/worker/web, ALB, ECR, Secrets Manager: secret *values* never
 touch Terraform state; RDS manages its own master password). The deploy
 runbook with exact bootstrap commands and an honest cost estimate is
 [terraform/README.md](terraform/README.md). What breaks at 100/10k/1M users
@@ -467,7 +467,7 @@ applied to a live account as part of this repo's development.
 90 tests: unit (chunker edge cases incl. pathological inputs, parser
 rejection paths, JWT/hashing failure modes, RRF math against stubbed
 repositories, citation filtering, cost math, storage-quota thresholds) and
-integration — integration tests run the **real app** (httpx + lifespan)
+integration: integration tests run the **real app** (httpx + lifespan)
 against a **real Postgres** that is recreated and migrated by the actual
 Alembic migrations each session, with deterministic fake providers and eager
 Celery so the full upload→worker→completed path executes in-process. Covered
@@ -489,34 +489,34 @@ ruff → mypy → unit tests → `alembic upgrade` + `alembic check` (migration/
 drift fails the build) → integration tests against a pgvector service →
 docker build. Deployment runbook: [DEPLOYMENT.md](DEPLOYMENT.md).
 
-Measured coverage (`make test-cov`): **81% line coverage**, 90 tests —
+Measured coverage (`make test-cov`): **81% line coverage**, 90 tests:
 observability, rate limiting (real 429s against Redis), storage quotas, batch
 upload, SSE status streaming, and request-ID behavior included.
 The uncovered remainder is deliberate: `cli.py` (operator tooling, exercised
 manually each stage), and the Anthropic/local-model provider internals, which
-need API keys or model downloads — their construction guards are covered, the
+need API keys or model downloads. Their construction guards are covered, the
 network paths are not. Numbers here are only ever measured ones.
 
 ## What I'd do differently
 
-Honest reflections after building it — the trade-offs I'd revisit, and why:
+Honest reflections after building it: the trade-offs I'd revisit, and why:
 
 - **Upload bytes in Postgres BYTEA → object storage sooner.** Storing raw
   payloads in the `documents` table (ADR 0005) kept the stack to one datastore
   and made re-embedding trivial, which was the right call at a 10MB cap. But it
   puts large binary in the same buffer cache as the hot retrieval path, and it
   bloats backups. At any real scale I'd move raw bytes to S3 and keep only a
-  pointer in Postgres — the empty ECS task role in the Terraform is already the
+  pointer in Postgres: the empty ECS task role in the Terraform is already the
   seam where the bucket policy would go.
 - **Redis broker → SQS (or at least a durable broker).** Redis as the Celery
   broker is simple and fast, but a Redis restart drops queued-but-unstarted
-  messages (documents stay PENDING, re-enqueueable — but still, message loss is
+  messages (documents stay PENDING, re-enqueueable, but still, message loss is
   real). At-least-once with idempotent processing already tolerates
   redelivery; a durable queue would *delete* the message-loss failure mode
   instead of merely documenting it.
 - **Keyword search: `ts_rank_cd`, not true BM25.** Staying inside Postgres FTS
   (ADR 0003) avoided operating a search engine, and the eval harness shows
-  hybrid still beats dense — but `ts_rank_cd` lacks corpus-level IDF, and the
+  hybrid still beats dense, but `ts_rank_cd` lacks corpus-level IDF, and the
   measured keyword-mode plateau is the cost. For a keyword-heavy corpus I'd put
   a real BM25 engine behind the existing `keyword_search()` seam.
 - **In-memory UI sessions → Redis-backed.** The per-session login (Stage 5)
@@ -534,9 +534,9 @@ Honest reflections after building it — the trade-offs I'd revisit, and why:
   (which returns an `X-Poll-Interval` hint header while non-terminal), or
   subscribe to the `GET /v1/documents/{id}/events` SSE stream for pushed
   status transitions. Outbound webhooks (delivering status to a caller's URL)
-  are future work — a design note, not built, because they need a delivery
+  are future work: a design note, not built, because they need a delivery
   subsystem (retries, signing, dead-lettering) that the SSE stream doesn't.
-- Upload payloads live in Postgres BYTEA (deliberate at a 10MB cap — ADR
+- Upload payloads live in Postgres BYTEA (deliberate at a 10MB cap, ADR
   0005); object storage is the move if caps grow. Per-tenant total storage is
   capped (`RAG_MAX_TENANT_STORAGE_BYTES`, default 500MB, enforced on the API
   upload path before the row is written); set 0 to disable for single-tenant
@@ -546,12 +546,12 @@ Honest reflections after building it — the trade-offs I'd revisit, and why:
   tests (keys/downloads); they're exercised only in real deployments.
 - Postgres FTS lexes dotted identifiers unintuitively (`hnsw.ef_search` →
   `hnsw.ef` + `search`), so keyword queries for the underscored part alone
-  won't match — a documented tokenizer behavior, not a bug we hide.
+  won't match: a documented tokenizer behavior, not a bug we hide.
 - Token counts are word-based estimates (see `ingestion/chunking.py`), not a
   real tokenizer; chunk sizing is a budget, and inputs past bge's 512-token
-  cap would be silently truncated by the encoder — the 400-token default
+  cap would be silently truncated by the encoder; the 400-token default
   target keeps clear of that.
-- Keyword ranking is Postgres `ts_rank_cd`, not true BM25 (no corpus IDF) —
+- Keyword ranking is Postgres `ts_rank_cd`, not true BM25 (no corpus IDF):
   trade-off documented in ADR 0003.
 - Full-text search uses the `english` tsvector config only; non-English
   corpora will tokenize poorly until language handling is added.
@@ -559,9 +559,9 @@ Honest reflections after building it — the trade-offs I'd revisit, and why:
   rejected with an actionable error, and complex layouts (multi-column,
   tables) extract imperfectly.
 - The `fake` providers are deterministic plumbing for tests/offline dev, not
-  semantic — don't judge retrieval quality on them.
+  semantic. Don't judge retrieval quality on them.
 - Tenant filtering happens after the HNSW ANN scan (pgvector post-filter);
-  recall for small tenants can degrade at large corpus sizes — see ADR 0002.
+  recall for small tenants can degrade at large corpus sizes. See ADR 0002.
 - `CREATE EXTENSION vector` in migration 0001 assumes the role may install
   extensions (true in compose and for the RDS master user the Terraform
   stack uses).
