@@ -29,12 +29,26 @@ alembic upgrade head
 if [ "${RAG_DEMO_BOOTSTRAP:-0}" = "1" ]; then
   echo "Creating the public demo tenant and credential (bootstrap)..."
   python -m rag_platform.cli create-tenant --slug demo --name "Public demo" || true
-  python -m rag_platform.cli create-credential --tenant demo --name public-demo > /tmp/demo-credential.json || true
-  cat /tmp/demo-credential.json
+  CRED=$(python -m rag_platform.cli create-credential --tenant demo --name public-demo || true)
+  echo "$CRED"
+  CID=$(printf '%s' "$CRED" | python -c "import sys, json; print(json.load(sys.stdin)['client_id'])" || true)
+  CS=$(printf '%s' "$CRED" | python -c "import sys, json; print(json.load(sys.stdin)['client_secret'])" || true)
   # Print SHA-256 checksums of both values (the secret's hash is the same
   # one the database stores) so hand-copied credentials can be verified
   # against them before use.
-  python -c "import hashlib, json; d = json.load(open('/tmp/demo-credential.json')); print('demo client_id sha256:', hashlib.sha256(d['client_id'].encode()).hexdigest()); print('demo secret sha256:', hashlib.sha256(d['client_secret'].encode()).hexdigest())" || true
+  python -c "import hashlib, sys; print('demo client_id sha256:', hashlib.sha256(sys.argv[1].encode()).hexdigest()); print('demo secret sha256:', hashlib.sha256(sys.argv[2].encode()).hexdigest())" "$CID" "$CS" || true
+  # Self-test: once the API is up, exchange the new credential from inside
+  # this same container and print the result, so a login failure can be
+  # located (inside the container vs from the public URL).
+  (
+    for i in $(seq 1 45); do
+      curl -s -o /dev/null "http://localhost:${PORT}/healthz" && break || sleep 2
+    done
+    echo "bootstrap self-test token exchange:"
+    curl -s -X POST "http://localhost:${PORT}/v1/auth/token" \
+      -d "grant_type=client_credentials&client_id=${CID}&client_secret=${CS}" || true
+    echo
+  ) &
 fi
 
 echo "Starting Celery worker in the background..."
