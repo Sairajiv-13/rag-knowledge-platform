@@ -2,19 +2,21 @@
 
 ## Supported versions
 
-The main branch is the current version of this design. Security corrections land on main. There are no other maintained branches.
+Security fixes land on the main branch and in the latest tagged release. Older releases do not get security fixes, so stay current.
 
-## Reporting a problem
+## Reporting a vulnerability
 
-Do not open a public issue for a security problem in this design. A public issue would describe the weakness in a HIPAA aligned setup before it is corrected.
+Do not open a public issue for a security problem. A public issue tells everyone where the hole is before a fix exists.
 
 Email the report to sairn3@gmail.com. Include:
 
-- The weakness, in plain words
-- Where it sits: the file and section, for example the security group rules in `ARCHITECTURE.md` or a control mapping in `COMPLIANCE.md`
-- The HIPAA control it affects, if you know it, such as §164.312(e)(1) for transmission and network protections
-- What an attacker gains if the design is deployed as written
+- What you found, in plain words
+- The endpoint or module involved, for example `src/rag_platform/retrieval` or the auth routes in `src/rag_platform/api`
+- Steps to reproduce, with a tenant token setup described well enough to repeat
+- What an attacker gains: reading another tenant's documents, bypassing revocation, quota or rate limit abuse, or something else
 
-Never include real patient data, AWS account identifiers, access keys, or real endpoint values in a report. Describe the shape of the problem, not live values.
+You will get a reply within three business days. If the report checks out, the fix ships before any public write-up, and you will be told when it is out. You will be credited in the release notes unless you ask not to be named.
 
-You will get a reply within three business days. If the report checks out, the documents are corrected before anything is posted in public, and you will be told when the correction is on main.
+## Areas that get priority
+
+Tenant isolation and token handling are the sensitive parts of this service. `tenant_id` always comes from the JWT, a cross-tenant read returns 404 rather than 403, and token liveness is checked on every request so revocation is immediate. Reports that break any of those three properties go to the front of the queue.
