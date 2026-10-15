@@ -1,63 +1,58 @@
 # Contributing
 
-Short version: branch from main, keep the change small, run `make check`, open a PR.
+Short version: branch from main, keep the change small, run `make ci`, open a PR.
 
 ## Prerequisites
 
-- Python 3.11 or newer. CI runs 3.12, and the README quickstart uses 3.12.
-- Docker, if you want the full local stack (Postgres, Redis, Qdrant, Ollama).
+- Python 3.12. The package requires it (`requires-python = ">=3.12"` in `pyproject.toml`), and CI runs 3.12.
+- Docker, for Postgres with pgvector and for Redis. Integration tests need a real Postgres.
 
 ## Setup
 
 ```bash
 pip install -e ".[dev]"
-cp .env.example .env
+docker compose up --build -d
+make migrate
+curl -s localhost:8000/healthz
 ```
 
-The defaults in `.env.example` are sandbox safe. Tests need no real keys and no running services.
+`make migrate` runs `alembic upgrade head` inside the api container. The health check should return `{"status":"ok"}`. Interactive docs are at http://localhost:8000/docs.
 
-To run the stack:
-
-```bash
-make up        # docker compose: Postgres, Redis, Qdrant, Ollama, api, worker
-make api       # terminal 1, without Docker
-make worker    # terminal 2, without Docker
-```
-
-Run `pre-commit install` once after cloning. The hooks in `.pre-commit-config.yaml` run ruff and basic file checks on each commit, the same checks CI runs.
+Without Docker, run the API with `make dev` (uvicorn against `src/`). You still need Postgres and Redis reachable.
 
 ## Checks
 
-Run these before you push. `make check` runs the first four in one go.
+- Lint: `ruff check src tests migrations` (what CI runs; `make lint` covers `src`)
+- Types: `mypy`, configured in `pyproject.toml` for the `rag_platform` package under `src/`
+- Unit tests: `make test-unit` (`pytest tests/unit`). No services needed.
+- Integration tests: `make test-integration` (`pytest tests/integration`). Needs Postgres up first, for example `docker compose up db`. The suite recreates the database and runs the real Alembic migrations each session.
+- Coverage: `make test-cov`
+- All of the above: `make ci`
 
-- `make lint`: ruff check and format check over `app`, `tests`, `scripts`, `evals`
-- `make type`: mypy in strict mode over `app` and `evals`
-- `make cov`: pytest with the coverage gate, 80 percent minimum on `app`
-- `make eval`: the evaluation harness in `evals/`, minimum accuracy 0.90
-- `make test`: the plain suite, no coverage gate
+## Rules that matter here
 
-The test suite is hermetic. SQLite stands in for Postgres, fakeredis for Redis, and every external integration runs through a sandbox adapter in `app/adapters`. Tests live in `tests/unit`, `tests/integration`, and `tests/smoke`. Smoke tests call a live LLM, self-skip when none is reachable, and stay out of the default run.
-
-CI also runs `python -m scripts.idempotency_check`. If you touch request handling or the worker in `app/jobs`, make sure external idempotency keys stay deterministic (ADR-0017).
+- Tenant isolation is enforced in code, not in the database (ADR 0002). `tenant_id` comes from the JWT, never from the request body. If you touch `src/rag_platform/retrieval`, the API routes, or `src/rag_platform/models.py`, add or update tests at both the API level and the SQL level.
+- `src/rag_platform/models.py` is the source of truth for the schema. Change the model, then add a migration with `make revision`. CI runs `alembic upgrade` plus `alembic check`, so model and migration drift fails the build.
+- Read the ADR before you change an area it covers. ADRs live in `docs/adr`. The load-bearing ones: 0001 (providers), 0002 (tenant isolation), 0003 (hybrid retrieval), 0004 (auth), 0005 (ingest jobs).
 
 ## Where things live
 
-- `app/graph`: LangGraph nodes, retry, and the pipeline build
-- `app/jobs`: Redis queue and the idempotent worker
-- `app/adapters`: ports, with real and sandbox implementations (llm, knowledge, jira, slack, email)
-- `app/security`: JWT, scopes, rate limiting, SSRF egress guard
-- `app/db`: async SQLAlchemy engine, models, repository
-- `docs/adr`: architecture decision records, 0001 to 0021. Read the ADR for an area before you change how it behaves.
+- `src/rag_platform/api`: routes and dependency accessors
+- `src/rag_platform/ingestion`: parsers (pdf, md, html) and the sentence-packing chunker
+- `src/rag_platform/retrieval`: tenant-scoped queries, RRF hybrid search, rerank
+- `src/rag_platform/llm`: provider interface with anthropic, local, and fake implementations
+- `src/rag_platform/worker`: Celery app and the ingest task
+- `src/rag_platform/services`: ingestion orchestration
+- `tests/unit` and `tests/integration`: split by whether a test needs Postgres
 
 ## Branches and commits
 
-- Branch names: short and plain, such as `fix/token-refresh-race` or `feat/slack-adapter-retries`.
-- Commit subjects: short, imperative, one change per commit. Example: `Reject expired scopes at the API layer`.
-- Keep formatting-only changes in their own commit so the real change stays easy to review.
+- Branch names: short and plain, such as `fix/chunker-empty-doc` or `feat/retrieval-rerank-flag`.
+- Commit subjects: short, imperative, one change per commit. Example: `Return 404 for cross-tenant document reads`.
+- Keep formatting-only changes in their own commit.
 
 ## Pull requests
 
 - Fill in the PR template. Say what changed, the exact commands you ran, and the result.
-- CI must pass: lint, type check, coverage gate, eval gate, idempotency check, and the Docker build.
-- If you change code in `app/`, note the coverage number from `make cov` in the PR.
-- If a change alters a decision recorded in `docs/adr`, say so in the PR and update or add the ADR.
+- CI must pass: ruff, mypy, unit tests, migration check, integration tests against a pgvector service, and the Docker build.
+- If you change retrieval or answering code, note the coverage from `make test-cov` in the PR. Core paths (answering, retrieval, security, models) sit at 100 percent and should stay there.
