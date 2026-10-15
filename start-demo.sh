@@ -37,17 +37,33 @@ if [ "${RAG_DEMO_BOOTSTRAP:-0}" = "1" ]; then
   # one the database stores) so hand-copied credentials can be verified
   # against them before use.
   python -c "import hashlib, sys; print('demo client_id sha256:', hashlib.sha256(sys.argv[1].encode()).hexdigest()); print('demo secret sha256:', hashlib.sha256(sys.argv[2].encode()).hexdigest())" "$CID" "$CS" || true
+  # Which database this shell (and therefore the CLI) is talking to.
+  python -c "import os; from urllib.parse import urlparse; u = urlparse(os.environ.get('RAG_DATABASE_URL', '')); print('demo db target:', u.hostname, u.port, u.path)" || true
   # Self-test: once the API is up, exchange the new credential from inside
   # this same container and print the result, so a login failure can be
-  # located (inside the container vs from the public URL).
+  # located (inside the container vs from the public URL). Python is used
+  # because the slim image has no curl.
   (
-    for i in $(seq 1 45); do
-      curl -s -o /dev/null "http://localhost:${PORT}/healthz" && break || sleep 2
-    done
-    echo "bootstrap self-test token exchange:"
-    curl -s -X POST "http://localhost:${PORT}/v1/auth/token" \
-      -d "grant_type=client_credentials&client_id=${CID}&client_secret=${CS}" || true
-    echo
+    python - "$PORT" "$CID" "$CS" <<'PYEOF' || true
+import sys, time, urllib.request, urllib.parse, urllib.error
+port, cid, cs = sys.argv[1], sys.argv[2], sys.argv[3]
+base = "http://localhost:" + port
+for _ in range(45):
+    try:
+        urllib.request.urlopen(base + "/healthz", timeout=3)
+        break
+    except Exception:
+        time.sleep(2)
+data = urllib.parse.urlencode({"grant_type": "client_credentials", "client_id": cid, "client_secret": cs}).encode()
+req = urllib.request.Request(base + "/v1/auth/token", data=data)
+try:
+    with urllib.request.urlopen(req, timeout=15) as r:
+        print("bootstrap self-test token exchange:", r.status, r.read().decode()[:200])
+except urllib.error.HTTPError as e:
+    print("bootstrap self-test token exchange:", e.code, e.read().decode()[:200])
+except Exception as e:
+    print("bootstrap self-test token exchange: error", repr(e))
+PYEOF
   ) &
 fi
 
