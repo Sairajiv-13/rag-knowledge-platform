@@ -8,7 +8,7 @@
 
 A multi-tenant RAG service. You upload documents, ask questions in plain English, and get answers that quote the exact passages they came from. Every answer shows its sources, and if the model tries to cite something that wasn't retrieved, that citation gets stripped before you see it.
 
-Live API (interactive docs): https://rag-knowledge-platform-production.up.railway.app/docs
+Hosted demo: currently offline (the code runs locally with docker compose, see Quick start). A hosted deployment will be linked here when it is live again.
 
 **Status:** functionally complete, verified for single-node work up to ~50k chunks. I've tried to be exact about what's actually tested versus what's built but unproven at scale. Verified: 90 tests at 81% line coverage, hybrid retrieval measured against a labeled eval set, retrieval latency measured on disclosed hardware, per-tenant quotas, live ingestion status, and per-session tenant login in the UI. Not validated at scale: the million-user tier described in SCALABILITY.md (no multi-node load test), the AWS Terraform (it passes fmt/validate in CI but I never applied it to a live account), and answer-quality numbers against a real LLM (the harness exists, it needs a live model to mean anything). The full list is in Limitations at the bottom. I'd rather you know the edges than find them.
 
