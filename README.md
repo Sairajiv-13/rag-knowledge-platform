@@ -9,7 +9,7 @@
 
 A multi-tenant RAG service. You upload documents, ask questions in plain English, and get answers that quote the exact passages they came from. Every answer shows its sources, and if the model tries to cite something that wasn't retrieved, that citation gets stripped before you see it.
 
-Hosted demo: currently offline (the code runs locally with docker compose, see Quick start). A hosted deployment will be linked here when it is live again.
+Hosted demo: https://rag-knowledge-platform-rnsc.onrender.com (API docs at /docs). It runs on a free tier, so the first request after idle can take about a minute. Login details and a walkthrough are under "Running the hosted demo" below.
 
 ![Architecture](architecture-diagram.png)
 
@@ -40,7 +40,7 @@ A multi-tenant FastAPI service. Uploads are ingested by a Celery worker into Pos
 - Hybrid search latency stays near 60 to 90 ms p50 from 1,000 to 50,000 chunks on one vCPU (see benchmarks/RESULTS.md)
 - 90 tests, 81 percent coverage, green CI
 - Container image: https://github.com/users/Sairajiv-13/packages/container/package/rag-knowledge-platform
-- Stated plainly: the hosted demo is offline, and the eval numbers use a deterministic embedder, so read the ordering between modes rather than the absolute values. The status block below lists what is verified and what is not
+- Stated plainly: the hosted demo runs the deterministic providers, so it proves the pipeline (upload, ingest, hybrid retrieval, cited answers), not real model quality. The eval numbers use a deterministic embedder too, so read the ordering between modes rather than the absolute values. The status block below lists what is verified and what is not
 
 ## Tech stack
 
@@ -420,7 +420,24 @@ Python, FastAPI, PostgreSQL + pgvector, Celery/Redis, Next.js, Docker, Terraform
 
 ## Running the hosted demo
 
-The hosted instance runs the API against a small operator-loaded corpus so the answers endpoint works out of the box. If you deploy your own, run the worker (`./start-worker.sh`) alongside the API so the upload endpoint can process documents. Deploy runbook: `DEPLOYMENT.md`. It runs on trial credit plus an Anthropic key, so it's cheap for a handful of questions; turn it off when you're not demoing.
+The demo runs on the Render free tier: https://rag-knowledge-platform-rnsc.onrender.com
+
+It is the production API and worker packaged with a local Redis in one container (`Dockerfile.demo`), backed by a free Postgres with pgvector. The providers are the deterministic ones (fake embedder, fake LLM), so the answers show the retrieval and citation machinery working rather than real model quality. The free service sleeps when idle, so the first request can take about a minute, and the free database expires in mid November 2026.
+
+Public demo login, tenant "demo", rate limited and shared by every visitor:
+
+- client_id: rag_ci_922f76e82b684d3e56532501
+- client_secret: rag_cs_M7VA4KaY8xnTw0t5ZleBqG1-FJWdy6q0_-VmUu9DqKo
+
+Get a token, upload a small markdown or text file, then search or ask about it:
+
+```
+curl -X POST https://rag-knowledge-platform-rnsc.onrender.com/v1/auth/token -d "grant_type=client_credentials&client_id=rag_ci_922f76e82b684d3e56532501&client_secret=<redacted>"
+curl -X POST https://rag-knowledge-platform-rnsc.onrender.com/v1/documents -H "Authorization: Bearer <token>" -F file=@notes.md
+curl -X POST https://rag-knowledge-platform-rnsc.onrender.com/v1/search -H "Authorization: Bearer <token>" -H "Content-Type: application/json" -d '{"query": "your question", "top_k": 3}'
+```
+
+If you deploy your own, run the worker (`./start-worker.sh`) alongside the API so the upload endpoint can process documents. Deploy runbook: `DEPLOYMENT.md`.
 
 ## Limitations / future work
 
