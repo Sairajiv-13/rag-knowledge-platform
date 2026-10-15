@@ -26,6 +26,26 @@ Hosted demo: currently offline (the code runs locally with docker compose, see Q
 > Everything not yet done is listed in *Limitations / future work*: named,
 > not hidden. See also *What I'd do differently* below.
 
+## Problem
+
+Teams sit on documents nobody can search well. Keyword search misses meaning, and plain model answers invent sources. The need is answers grounded in the team's own documents, with the receipts shown, and tenants kept apart.
+
+## Approach
+
+A multi-tenant FastAPI service. Uploads are ingested by a Celery worker into Postgres with pgvector. Retrieval runs dense search and keyword search together and fuses them with reciprocal rank fusion. Answers cite retrieved passages, and any citation that was not retrieved is stripped before the response leaves. Per-tenant auth with JWT sessions, storage quotas, and token metering are built in.
+
+## Results
+
+- Hybrid retrieval measured against dense only and keyword only on 38 labeled questions: hit@1 0.553 vs 0.474 vs 0.395, MRR@5 0.681. The expected fact is in a retrieved chunk for 35 of 38 questions
+- Hybrid search latency stays near 60 to 90 ms p50 from 1,000 to 50,000 chunks on one vCPU (see benchmarks/RESULTS.md)
+- 90 tests, 81 percent coverage, green CI
+- Container image: https://github.com/users/Sairajiv-13/packages/container/package/rag-knowledge-platform
+- Stated plainly: the hosted demo is offline, and the eval numbers use a deterministic embedder, so read the ordering between modes rather than the absolute values. The status block below lists what is verified and what is not
+
+## Tech stack
+
+Python 3.12, FastAPI, PostgreSQL with pgvector, Celery, Redis, Server-Sent Events, Docker, GitHub Actions
+
 ## Why this project exists
 
 Teams keep rebuilding the same thing: question-answering over their own
