@@ -21,13 +21,14 @@ redis-server --daemonize yes --port 6379 --save '' --appendonly no --dir /tmp
 echo "Running database migrations (also CREATE EXTENSION vector)..."
 alembic upgrade head
 
-# One-time demo bootstrap: with RAG_DEMO_BOOTSTRAP=1, issue the public demo
-# tenant credential and print it to the deploy log (the secret is shown
-# exactly once, like the CLI's normal output). The operator copies it from
-# the log and then unsets the flag, so redeploys do not mint more
+# One-time demo bootstrap: with RAG_DEMO_BOOTSTRAP=1, create the demo
+# tenant and issue its credential, printed to the deploy log (the secret is
+# shown exactly once, like the CLI's normal output). The operator copies it
+# from the log and then unsets the flag, so redeploys do not mint more
 # credentials.
 if [ "${RAG_DEMO_BOOTSTRAP:-0}" = "1" ]; then
-  echo "Creating the public demo credential (bootstrap)..."
+  echo "Creating the public demo tenant and credential (bootstrap)..."
+  python -m rag_platform.cli create-tenant --slug demo --name "Public demo" || true
   python -m rag_platform.cli create-credential --tenant demo --name public-demo || true
 fi
 
