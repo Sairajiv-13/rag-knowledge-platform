@@ -31,9 +31,10 @@ if [ "${RAG_DEMO_BOOTSTRAP:-0}" = "1" ]; then
   python -m rag_platform.cli create-tenant --slug demo --name "Public demo" || true
   python -m rag_platform.cli create-credential --tenant demo --name public-demo > /tmp/demo-credential.json || true
   cat /tmp/demo-credential.json
-  # Print the secret's SHA-256 (the same hash the database stores) so the
-  # operator can verify a hand-copied secret against it before use.
-  python -c "import hashlib, json; d = json.load(open('/tmp/demo-credential.json')); print('demo secret sha256:', hashlib.sha256(d['client_secret'].encode()).hexdigest())" || true
+  # Print SHA-256 checksums of both values (the secret's hash is the same
+  # one the database stores) so hand-copied credentials can be verified
+  # against them before use.
+  python -c "import hashlib, json; d = json.load(open('/tmp/demo-credential.json')); print('demo client_id sha256:', hashlib.sha256(d['client_id'].encode()).hexdigest()); print('demo secret sha256:', hashlib.sha256(d['client_secret'].encode()).hexdigest())" || true
 fi
 
 echo "Starting Celery worker in the background..."
