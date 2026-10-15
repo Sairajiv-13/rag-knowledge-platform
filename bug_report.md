@@ -1,26 +1,28 @@
 ---
 name: Bug report
-about: Report an error in these documents or in the design
+about: Report a defect in the RAG platform
 title: ""
 labels: bug
 assignees: ""
 ---
 
-## What is wrong
+## What happened
 
-The error, in plain words. Quote the line or the table row that is wrong.
+What the API or the worker did. Paste the error message, the status code, or the document status if you have one.
 
-## Where it is
+## Expected
 
-- File: (`README.md`, `ARCHITECTURE.md`, `COMPLIANCE.md`, `COST_OPTIMIZATION.md`, `DEPLOYMENT.md`, or `budget.json`)
-- Section or table:
+What should have happened instead.
 
-## What it should say
+## Reproduce
 
-The corrected text or number, and the source behind it: an AWS document, a HIPAA section number, or a value elsewhere in this repo that it disagrees with.
+1. Steps, starting from how the service was run
+2. The call you made (endpoint and payload shape), with tokens and real document content removed
+3. Where it went wrong: upload, ingest worker, retrieval, or answering
 
-## Environment, if you found it while deploying
+## Environment
 
-- Terraform version:
-- AWS region:
-- Step in `DEPLOYMENT.md` where it failed:
+- Version or commit:
+- How it runs: Docker Compose or local (`make dev`)
+- Python version:
+- Embedding and answer provider: fake, anthropic, or local
