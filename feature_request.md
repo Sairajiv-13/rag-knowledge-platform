@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Propose a change to Campaign Studio
+about: Propose a change to the RAG platform
 title: ""
 labels: enhancement
 assignees: ""
@@ -8,11 +8,11 @@ assignees: ""
 
 ## Problem
 
-What work is hard or impossible today. Name the pipeline stage involved if you can: generate, score, assemble, the API, or the demo UI.
+What work is hard or impossible today. Name the area involved if you can: ingestion, retrieval, the API, the worker, or metering.
 
 ## Proposal
 
-What you want added or changed, and how it should behave.
+What you want added or changed, and how it should behave. If it affects more than one tenant, say how tenant isolation holds.
 
 ## Alternatives considered
 
