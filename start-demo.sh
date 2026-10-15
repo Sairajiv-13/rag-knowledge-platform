@@ -21,6 +21,16 @@ redis-server --daemonize yes --port 6379 --save '' --appendonly no --dir /tmp
 echo "Running database migrations (also CREATE EXTENSION vector)..."
 alembic upgrade head
 
+# One-time demo bootstrap: with RAG_DEMO_BOOTSTRAP=1, issue the public demo
+# tenant credential and print it to the deploy log (the secret is shown
+# exactly once, like the CLI's normal output). The operator copies it from
+# the log and then unsets the flag, so redeploys do not mint more
+# credentials.
+if [ "${RAG_DEMO_BOOTSTRAP:-0}" = "1" ]; then
+  echo "Creating the public demo credential (bootstrap)..."
+  python -m rag_platform.cli create-credential --tenant demo --name public-demo || true
+fi
+
 echo "Starting Celery worker in the background..."
 celery -A rag_platform.worker.celery_app:app worker --loglevel=INFO --concurrency=1 &
 
